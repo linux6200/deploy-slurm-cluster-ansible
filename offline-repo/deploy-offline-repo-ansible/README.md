@@ -58,3 +58,12 @@ apt-cache policy
 ```
 
 ---
+
+
+
+# 刷新APT缓存
+```
+sudo apt clean
+sudo rm -rf /var/lib/apt/lists/*
+sudo apt update
+```

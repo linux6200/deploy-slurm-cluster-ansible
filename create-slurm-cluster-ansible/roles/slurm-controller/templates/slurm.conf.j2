@@ -1,6 +1,6 @@
 ClusterName={{ slurm_cluster_name }}
 SlurmUser={{ slurm_user }} 
-# SlurmdUser={{ slurmd_user | default(slurm_user) }}
+SlurmdUser={{ slurmd_user | default(slurm_user) }}
 SlurmctldHost={{ slurm_control_machine }}
 
 SlurmctldLogFile=/var/log/slurm/slurmctld.log

@@ -1,11 +1,10 @@
 ---
 - name: Install Slurm controller and dbd packages
   apt:
-    name:
-      - slurm-wlm
-      - slurm-wlm-basic-plugins
-      - slurmctld
-      - slurmdbd
+    name: 
+      - slurm-smd-slurmctld
+      - slurm-smd-slurmdbd
+      - slurm-smd-client
     state: present
     update_cache: yes
 

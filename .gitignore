@@ -1,2 +1,4 @@
 # Ignore all tar.gz archives
-*.tar.gz
+*.tar.
+*.log
+offline-repo/deploy-offline-repo-ansible/files/slurm-25.11.0-packages-offline.tar.gz

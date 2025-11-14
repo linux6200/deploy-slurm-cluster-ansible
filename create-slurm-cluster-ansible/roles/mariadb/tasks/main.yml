@@ -20,8 +20,8 @@
       [mysqld]
       bind-address = {{ mariadb_bind_address }}
       max_connections = 200
-      innodb_lock_wait_timeout = 50
-      innodb_buffer_pool_size = 1G
+      # innodb_lock_wait_timeout = 50
+      # innodb_buffer_pool_size = 1G
       character-set-server = utf8mb4
       collation-server = utf8mb4_general_ci
     dest: /etc/mysql/mariadb.conf.d/99-slurm.cnf
