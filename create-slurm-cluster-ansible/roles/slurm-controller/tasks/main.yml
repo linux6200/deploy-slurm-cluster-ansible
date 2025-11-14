@@ -1,7 +1,8 @@
 ---
-- name: Install Slurm controller and dbd packages
+- name: Install packages, include base and Slurm controller & dbd packages
   apt:
     name: 
+      - sshpass
       - slurm-smd-slurmctld
       - slurm-smd-slurmdbd
       - slurm-smd-client
@@ -26,7 +27,7 @@
     owner: slurm
     group: slurm
     mode: '0600'
-  notify: restart slurmctld
+  # notify: restart slurmctld
 
 - name: Template slurmdbd.conf
   template:
@@ -38,6 +39,56 @@
   notify:
     - restart slurmdbd
 
+- name: Ensure root .ssh exists on controller (run once on controller)
+  become: true
+  file:
+    path: /root/.ssh
+    state: directory
+    mode: '0700'
+  run_once: true
+  delegate_to: "{{ groups['controller'][0] }}"
+
+- name: Generate controller SSH keypair if missing (run once on controller)
+  become: true
+  command: ssh-keygen -t rsa -N '' -f /root/.ssh/id_rsa
+  args:
+    creates: /root/.ssh/id_rsa
+  run_once: true
+  delegate_to: "{{ groups['controller'][0] }}"
+
+- name: Slurp controller public key (run once on controller)
+  become: true
+  slurp:
+    src: /root/.ssh/id_rsa.pub
+  register: controller_pubkey_slurp
+  run_once: true
+  delegate_to: "{{ groups['controller'][0] }}"
+
+- name: Set controller public key fact
+  set_fact:
+    controller_pubkey: "{{ controller_pubkey_slurp.content | b64decode }}"
+  run_once: true
+
+- name: Distribute controller public key to compute nodes (add to ansible user authorized_keys)
+  become: true
+  authorized_key:
+    user: "{{ hostvars[item].ansible_user | default('ubuntu') }}"
+    key: "{{ controller_pubkey }}"
+    state: present
+  with_items: "{{ groups['compute'] | default([]) }}"
+  delegate_to: "{{ item }}"
+  run_once: true
+
+- name: Distribute controller public key to compute nodes (also add to root authorized_keys)
+  become: true
+  authorized_key:
+    user: root
+    key: "{{ controller_pubkey }}"
+    state: present
+  with_items: "{{ groups['compute'] | default([]) }}"
+  delegate_to: "{{ item }}"
+  run_once: true
+
 - name: Debug show resolved target for each compute host (runs on controller)
   debug:
     msg: "{{ item }} -> {{ hostvars[item].ansible_host | default('UNDEFINED') }}"
@@ -45,24 +96,15 @@
   delegate_to: "{{ groups['controller'][0] }}"
   run_once: true
 
-# - name: Sync /etc/slurm to all compute nodes (push from controller)
-#   synchronize:
-#     src: /etc/slurm/
-#     dest: "{{ hostvars[item].ansible_host | default(item) }}:/etc/slurm/"
-#     recursive: yes
-#     delete: yes
-#   with_items: "{{ groups['compute'] | default([]) }}"
-#   delegate_to: "{{ groups['controller'][0] }}"
-#   run_once: true
-
-# - name: Synchronize /etc/slurm
-#   synchronize:
-#     src: /etc/slurm/
-#     dest: /etc/slurm/
-#     recursive: yes
-#     delete: yes
-#     compress: yes
-
+- name: Sync /etc/slurm to all compute nodes (push from controller)
+  synchronize:
+    src: /etc/slurm/
+    dest: "{{ hostvars[item].ansible_host | default(item) }}:/etc/slurm/"
+    recursive: yes
+    delete: yes
+  with_items: "{{ groups['compute'] | default([]) }}"
+  delegate_to: "{{ groups['controller'][0] }}"
+  run_once: true
 
 - name: Ensure slurmdbd enabled and started
   service:
@@ -70,14 +112,14 @@
     enabled: true
     state: started
 
-- name: Ensure slurmctld enabled and started
-  service:
-    name: slurmctld
-    enabled: true
-    state: started
+# - name: Ensure slurmctld enabled and started
+#   service:
+#     name: slurmctld
+#     enabled: true
+#     state: started
 
-- name: Initialize slurm accounting cluster entry (idempotent)
-  command: sacctmgr -i add cluster name={{ slurm_cluster_name }}
-  changed_when: false
-  failed_when: false
-  when: use_slurmdbd | default(true)
+# - name: Initialize slurm accounting cluster entry (idempotent)
+#   command: sacctmgr -i add cluster name={{ slurm_cluster_name }}
+#   changed_when: false
+#   failed_when: false
+#   when: use_slurmdbd | default(true)

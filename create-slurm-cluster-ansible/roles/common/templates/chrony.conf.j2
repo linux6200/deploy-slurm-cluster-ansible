@@ -1,4 +1,56 @@
-# Minimal chrony config (template)
-server 169.254.169.123 iburst
-driftfile /var/lib/chrony/chrony.drift
+# ============================================================
+# chrony.conf template for offline HPC/Slurm cluster
+# Controller = local time source
+# Compute nodes = sync from controller
+# ============================================================
+
+{% if inventory_hostname in groups['controller'] %}
+# ------------------------------------------------------------
+# Controller Node Configuration (LOCAL TIME SOURCE)
+# ------------------------------------------------------------
+
+# Use the local system clock as the reference (offline mode)
+local stratum 10
+
+# Allow all internal compute nodes to sync (adjust CIDR if needed)
+allow {{ (hostvars[inventory_hostname].ansible_host | default((hostvars[inventory_hostname].ansible_default_ipv4 | default({'address':'127.0.0.1'}))['address'])) | regex_replace('\\.\\d+$', '.0') }}/24
+
+# Record the rate at which the system clock gains/loses time.
+driftfile /var/lib/chrony/drift
+
+# On startup, step the clock if the adjustment is larger than 1 second.
 makestep 1.0 3
+
+# Enable kernel RTC synchronization
+rtcsync
+
+# Log directory
+logdir /var/log/chrony
+
+# Optional to reduce log flood in HPC
+# noclientlog
+
+{% else %}
+# ------------------------------------------------------------
+# Compute Node Configuration
+# ------------------------------------------------------------
+
+# Sync directly from controller (primary server)
+server {{ groups['controller'][0] }} iburst
+
+# Record the rate at which the system clock gains/loses time.
+driftfile /var/lib/chrony/drift
+
+# On startup, step the clock if the adjustment is larger than 1 second.
+makestep 1.0 3
+
+# Enable kernel RTC synchronization
+rtcsync
+
+# Log directory
+logdir /var/log/chrony
+
+# Disable logging of clients for compute nodes
+# noclientlog
+
+{% endif %}

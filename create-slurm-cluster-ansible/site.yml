@@ -31,6 +31,24 @@
   roles:
     - munge
 
+- name: Setup database (MariaDB) on controller
+  hosts: controller
+  become: true
+  roles:
+    - mariadb
+
+- name: Render slurm.conf on controller using compute facts and start services
+  hosts: controller
+  become: true
+  roles:
+    - slurm-controller
+
+- name: Setup slurm compute nodes (slurmd)
+  hosts: compute
+  become: true
+  roles:
+    - slurm-compute 
+
 - name: Distribute munge key from controller to all nodes
   hosts: all
   become: true
@@ -57,20 +75,24 @@
         state: restarted
         enabled: true
 
-- name: Setup database (MariaDB) on controller
-  hosts: controller
-  become: true
-  roles:
-    - mariadb
 
-- name: Render slurm.conf on controller using compute facts and start services
-  hosts: controller
-  become: true
-  roles:
-    - slurm-controller
 
-- name: Setup slurm compute nodes (slurmd)
+- name: Ensure slurmctld enabled and started
+  hosts: controller
+  become: true 
+  tasks:
+  - name: Ensure slurmctld service is enabled and started
+    service:
+      name: slurmctld
+      enabled: true
+      state: started
+- name: Ensure slurmd service is enabled and start 
   hosts: compute
   become: true
-  roles:
-    - slurm-compute
+  tasks:
+  - name: Ensure slurmd service is enabled and started
+    service:
+      name: slurmd
+      state: restarted
+      enabled: true
+

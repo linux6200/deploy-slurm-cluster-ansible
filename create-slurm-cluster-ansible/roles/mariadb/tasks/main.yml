@@ -20,8 +20,8 @@
       [mysqld]
       bind-address = {{ mariadb_bind_address }}
       max_connections = 200
-      # innodb_lock_wait_timeout = 50
-      # innodb_buffer_pool_size = 1G
+      innodb_lock_wait_timeout = 900
+      innodb_buffer_pool_size = 4G
       character-set-server = utf8mb4
       collation-server = utf8mb4_general_ci
     dest: /etc/mysql/mariadb.conf.d/99-slurm.cnf
@@ -36,27 +36,28 @@
     host: "{{ mariadb_bind_address if mariadb_bind_address != '0.0.0.0' else '127.0.0.1' }}"
     timeout: 30
 
-# - name: Ensure root password is set (allow socket login then set)
-#   block:
-#     - name: Try to set root password via unix socket (socket auth)
-#       become: true
-#       mysql_user:
-#         login_user: root
-#         login_unix_socket: /run/mysqld/mysqld.sock
-#         name: root
-#         host_all: yes
-#         password: "{{ mariadb_root_password }}"
-#       register: set_root_via_socket
-#       ignore_errors: yes
+- name: Ensure root password is set (allow socket login then set)
+  block:
+    - name: Try to set root password via unix socket (socket auth)
+      become: true
+      mysql_user:
+        login_user: root
+        login_unix_socket: /run/mysqld/mysqld.sock
+        name: root
+        host_all: yes
+        password: "{{ mariadb_root_password }}"
+        login_password: "{{ mariadb_root_password }}"
+      register: set_root_via_socket
+      ignore_errors: yes
 
-#     - name: Fallback — set root password by running mysql CLI as system root (if socket method failed)
-#       when: set_root_via_socket is failed
-#       become: true
-#       shell: |
-#         mysql --protocol=socket -uroot -S /run/mysqld/mysqld.sock -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '{{ mariadb_root_password }}'; FLUSH PRIVILEGES;"
-#       args:
-#         executable: /bin/bash
-
+    - name: Fallback — set root password by running mysql CLI as system root (if socket method failed)
+      when: set_root_via_socket is failed
+      become: true
+      shell: |
+        mysql --protocol=socket -uroot -S /run/mysqld/mysqld.sock -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '{{ mariadb_root_password }}'; FLUSH PRIVILEGES;"
+      args:
+        executable: /bin/bash 
+    
 - name: Create slurm accounting database
   mysql_db:
     login_user: root

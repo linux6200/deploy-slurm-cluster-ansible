@@ -1,0 +1,8 @@
+---
+# Handler: restart chrony service when chrony config changes
+- name: Restart chrony
+  become: true
+  ansible.builtin.service:
+    name: chrony
+    state: restarted
+    enabled: yes

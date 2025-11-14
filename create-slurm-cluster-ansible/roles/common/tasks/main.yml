@@ -9,7 +9,7 @@
   become: true
   ansible.builtin.lineinfile:
     path: /etc/hosts
-    line: "{{ hostvars[item].ansible_host | default(hostvars[item].ansible_default_ipv4.address | default('127.0.0.1')) }} {{ item }}"
+    line: "{{ hostvars[item].ansible_host | default((hostvars[item].ansible_default_ipv4 | default({'address':'127.0.0.1'}))['address']) }} {{ item }}"
     regexp: '(^|\s){{ item }}($|\s)'
     state: present
     create: yes
@@ -43,6 +43,24 @@
       - apt-transport-https
       - ca-certificates
     state: present
+
+# 时间同步配置（基于 chrony）
+- name: Deploy chrony configuration
+  become: true
+  ansible.builtin.template:
+    src: chrony.conf.j2
+    dest: /etc/chrony/chrony.conf
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Restart chrony
+
+- name: Ensure chrony service is enabled and started
+  become: true
+  ansible.builtin.service:
+    name: chrony
+    enabled: yes
+    state: started
 
 - name: Ensure slurm user exists
   user:

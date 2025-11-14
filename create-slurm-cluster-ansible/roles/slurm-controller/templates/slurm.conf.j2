@@ -1,6 +1,6 @@
 ClusterName={{ slurm_cluster_name }}
 SlurmUser={{ slurm_user }} 
-SlurmdUser={{ slurmd_user | default(slurm_user) }}
+SlurmdUser=root
 SlurmctldHost={{ slurm_control_machine }}
 
 SlurmctldLogFile=/var/log/slurm/slurmctld.log
@@ -10,21 +10,28 @@ StateSaveLocation=/var/spool/slurmctld
 SlurmdSpoolDir=/var/spool/slurmd
 
 SchedulerType=sched/backfill
-SelectType=select/cons_res
-SelectTypeParameters=CR_Core
+#SelectType=select/cons_res
+#SelectTypeParameters=CR_Core
+SelectType=select/linear
+
+MailProg=/bin/true
+TaskPlugin=task/none
 
 # Accounting
 AccountingStorageType=accounting_storage/slurmdbd
 AccountingStorageHost={{ slurmdbd_storage_host }}
-AccountingStoragePass={{ slurmdbd_password }}
+# AccountingStoragePass={{ slurmdbd_password }}
 
 # Nodes dynamically populated from compute group facts
 {% for host in groups['compute'] %}
 {% set hv = hostvars[host] %}
 # Host: {{ host }}
-{% set vcpus = (hv.ansible_processor_vcpus | default(hv.ansible_processors | default(hv.ansible_processor_count | default(1)))) %}
+{% set vcpus = (hv.ansible_processor_vcpus | default(hv.ansible_processors | default(hv.ansible_processor_count | default(1)))) | int %}
 {% set mem = (hv.ansible_memtotal_mb | default(0)) %}
-NodeName={{ host }}  CPUs={{ vcpus }} RealMemory={{ mem }} State=UNKNOWN
+{% set sockets = (hv.ansible_processor_count | default(1)) | int %}
+{% set cores_per_socket = (hv.ansible_processor_cores | default((vcpus // sockets))) | int %}
+{% set threads_per_core = (vcpus // (sockets * cores_per_socket)) if (sockets * cores_per_socket) > 0 else 1 %}
+NodeName={{ host }} Sockets={{ sockets }} CoresPerSocket={{ cores_per_socket }} ThreadsPerCore={{ threads_per_core }} CPUs={{ vcpus }} RealMemory={{ mem }} State=UNKNOWN
 {% endfor %}
 
 PartitionName=debug Nodes={{ groups['compute'] | join(',') }} Default=YES MaxTime=INFINITE State=UP

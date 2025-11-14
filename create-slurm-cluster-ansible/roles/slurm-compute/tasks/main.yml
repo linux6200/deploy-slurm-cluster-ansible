@@ -23,18 +23,9 @@
     owner: slurm
     group: slurm
     mode: '0600'
-
-- name: Synchronize /etc/slurm
-  synchronize:
-    src: /etc/slurm/
-    dest: /etc/slurm/
-    recursive: yes
-    delete: yes
-    compress: yes
-
-
-- name: Ensure slurmd service is enabled and started
-  service:
-    name: slurmd
-    state: restarted
-    enabled: true
+ 
+# - name: Ensure slurmd service is enabled and started
+#   service:
+#     name: slurmd
+#     state: restarted
+#     enabled: true
