@@ -1,0 +1,62 @@
+---
+- name: Setup offline APT repository on all hosts
+  hosts: all
+  become: yes
+  vars:
+    offline_repo_root: "/opt/offline-apt-repo"
+    offline_repo_tar: "offline-apt-repo.tar.gz"
+    offline_repo_list_file: "/etc/apt/sources.list.d/offline-repo.list"
+
+  tasks:
+
+    - name: Ensure root directory exists
+      file:
+        path: "{{ offline_repo_root }}"
+        state: directory
+        mode: "0755"
+
+    - name: Copy offline repo tar.gz to host
+      copy:
+        src: "files/{{ offline_repo_tar }}"
+        dest: "/tmp/{{ offline_repo_tar }}"
+        mode: "0644"
+
+    - name: Extract offline repo
+      unarchive:
+        src: "/tmp/{{ offline_repo_tar }}"
+        dest: "{{ offline_repo_root }}"
+        remote_src: yes
+
+    - name: Disable default apt sources.list
+      copy:
+        content: ""
+        dest: "/etc/apt/sources.list"
+        mode: "0644"
+
+    - name: Disable all sources.list.d/*
+      shell: |
+        mkdir -p /etc/apt/sources.list.d.disabled
+        mv /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d.disabled/ 2>/dev/null || true
+
+    - name: Create offline APT repo source file
+      copy:
+        dest: "{{ offline_repo_list_file }}"
+        mode: "0644"
+        content: |
+          deb [trusted=yes] file:{{ offline_repo_root }} ./
+
+    - name: Fix permissions for repo directory
+      file:
+        path: "{{ offline_repo_root }}"
+        owner: root
+        group: root
+        recurse: yes
+
+    - name: Run apt update
+      shell: apt-get update
+      register: apt_update_result
+      changed_when: false
+
+    - name: Print apt update result
+      debug:
+        var: apt_update_result.stdout
