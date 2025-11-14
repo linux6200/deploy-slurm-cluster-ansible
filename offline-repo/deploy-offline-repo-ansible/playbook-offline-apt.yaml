@@ -1,10 +1,33 @@
 ---
+- name: Add inventory hosts to control machine known_hosts
+  hosts: localhost
+  connection: local
+  gather_facts: no
+  vars:
+    known_hosts_path: "{{ lookup('env','HOME') + '/.ssh/known_hosts' }}"
+  tasks:
+    - name: Ensure .ssh exists on control machine
+      file:
+        path: "{{ lookup('env','HOME') + '/.ssh' }}"
+        state: directory
+        mode: '0700'
+
+    - name: Scan and add host key for each inventory host to known_hosts
+      vars:
+        scan_cmd: "ssh-keyscan -H {{ item }} 2>/dev/null"
+      known_hosts:
+        path: "{{ known_hosts_path }}"
+        name: "{{ item }}"
+        key: "{{ lookup('pipe', 'ssh-keyscan -H ' + item + ' 2>/dev/null') }}"
+      loop: "{{ groups['all'] }}"
+      ignore_errors: yes
+
 - name: Setup offline APT repository on all hosts
   hosts: all
   become: yes
   vars:
     offline_repo_root: "/opt/offline-apt-repo"
-    offline_repo_tar: "offline-apt-repo.tar.gz"
+    offline_repo_tar: "slurm-25.11.0-packages-offline.tar.gz"
     offline_repo_list_file: "/etc/apt/sources.list.d/offline-repo.list"
 
   tasks:
@@ -17,7 +40,7 @@
 
     - name: Copy offline repo tar.gz to host
       copy:
-        src: "files/{{ offline_repo_tar }}"
+        src: "{{ offline_repo_tar }}"
         dest: "/tmp/{{ offline_repo_tar }}"
         mode: "0644"
 
@@ -26,6 +49,24 @@
         src: "/tmp/{{ offline_repo_tar }}"
         dest: "{{ offline_repo_root }}"
         remote_src: yes
+
+    - name: Detect extracted repo directory (first top-level dir under offline_repo_root)
+      find:
+        paths: "{{ offline_repo_root }}"
+        file_type: directory
+        recurse: no
+        depth: 1
+      register: found_repo_dirs
+      changed_when: false
+
+    - name: Set repo_path fact
+      set_fact:
+        repo_path: >-
+          {{ (found_repo_dirs.files | sort(attribute='path') | map(attribute='path') | list | first) | basename if found_repo_dirs.files | length > 0 else '' }}
+
+    - name: Set repo_full_path fact
+      set_fact:
+        repo_full_path: "{{ offline_repo_root + '/' + repo_path if repo_path else offline_repo_root }}"
 
     - name: Disable default apt sources.list
       copy:
@@ -43,7 +84,7 @@
         dest: "{{ offline_repo_list_file }}"
         mode: "0644"
         content: |
-          deb [trusted=yes] file:{{ offline_repo_root }} ./
+          deb [trusted=yes] file:{{ repo_full_path | default(offline_repo_root) }} ./
 
     - name: Fix permissions for repo directory
       file:
