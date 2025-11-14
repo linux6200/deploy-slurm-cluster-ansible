@@ -1,0 +1,76 @@
+- name: Add controller fingerprint to control host known_hosts (run locally once)
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  run_once: true
+  tasks:
+    - name: Add controller fingerprint to control host known_hosts
+      ansible.builtin.known_hosts:
+        path: "{{ lookup('env','HOME') + '/.ssh/known_hosts' }}"
+        name: "{{ hostvars['controller'].ansible_host | default(hostvars['controller'].inventory_hostname) }}"
+        key: "{{ lookup('pipe','ssh-keyscan -H ' + (hostvars['controller'].ansible_host | default(hostvars['controller'].inventory_hostname))) }}"
+        state: present
+
+- name: Gather facts on compute nodes
+  hosts: compute
+  gather_facts: yes
+  become: true
+  tasks:
+    - name: Ensure facts are collected (setup)
+      setup:
+
+- name: Setup common environment on all nodes
+  hosts: all
+  become: true
+  roles:
+    - common
+
+- name: Install and configure munge (generate on controller then distribute)
+  hosts: controller
+  become: true
+  roles:
+    - munge
+
+- name: Distribute munge key from controller to all nodes
+  hosts: all
+  become: true
+  gather_facts: false
+  tasks:
+    - name: fetch munge key from controller (once)
+      slurp:
+        src: /etc/munge/munge.key
+      delegate_to: "{{ groups['controller'][0] }}"
+      run_once: true
+      register: munge_key_slurp
+
+    - name: write munge key to nodes
+      copy:
+        content: "{{ munge_key_slurp.content | b64decode }}"
+        dest: /etc/munge/munge.key
+        owner: munge
+        group: munge
+        mode: '0400'
+
+    - name: ensure munge service restarted
+      service:
+        name: munge
+        state: restarted
+        enabled: true
+
+- name: Setup database (MariaDB) on controller
+  hosts: controller
+  become: true
+  roles:
+    - mariadb
+
+- name: Render slurm.conf on controller using compute facts and start services
+  hosts: controller
+  become: true
+  roles:
+    - slurm-controller
+
+- name: Setup slurm compute nodes (slurmd)
+  hosts: compute
+  become: true
+  roles:
+    - slurm-compute

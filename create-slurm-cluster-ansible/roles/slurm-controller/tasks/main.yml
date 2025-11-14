@@ -1,0 +1,84 @@
+---
+- name: Install Slurm controller and dbd packages
+  apt:
+    name:
+      - slurm-wlm
+      - slurm-wlm-basic-plugins
+      - slurmctld
+      - slurmdbd
+    state: present
+    update_cache: yes
+
+- name: Create slurm log and spool directories
+  file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ slurm_user }}"
+    group: "{{ slurm_group }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: /var/log/slurm, mode: '0755' }
+    - { path: /var/spool/slurmctld, mode: '0755' }
+
+- name: Template slurm.conf (generate from compute facts)
+  template:
+    src: slurm.conf.j2
+    dest: /etc/slurm/slurm.conf
+    owner: slurm
+    group: slurm
+    mode: '0600'
+  notify: restart slurmctld
+
+- name: Template slurmdbd.conf
+  template:
+    src: slurmdbd.conf.j2
+    dest: /etc/slurm/slurmdbd.conf
+    owner: slurm
+    group: slurm
+    mode: '0600'
+  notify:
+    - restart slurmdbd
+
+- name: Debug show resolved target for each compute host (runs on controller)
+  debug:
+    msg: "{{ item }} -> {{ hostvars[item].ansible_host | default('UNDEFINED') }}"
+  with_items: "{{ groups['compute'] | default([]) }}"
+  delegate_to: "{{ groups['controller'][0] }}"
+  run_once: true
+
+# - name: Sync /etc/slurm to all compute nodes (push from controller)
+#   synchronize:
+#     src: /etc/slurm/
+#     dest: "{{ hostvars[item].ansible_host | default(item) }}:/etc/slurm/"
+#     recursive: yes
+#     delete: yes
+#   with_items: "{{ groups['compute'] | default([]) }}"
+#   delegate_to: "{{ groups['controller'][0] }}"
+#   run_once: true
+
+# - name: Synchronize /etc/slurm
+#   synchronize:
+#     src: /etc/slurm/
+#     dest: /etc/slurm/
+#     recursive: yes
+#     delete: yes
+#     compress: yes
+
+
+- name: Ensure slurmdbd enabled and started
+  service:
+    name: slurmdbd
+    enabled: true
+    state: started
+
+- name: Ensure slurmctld enabled and started
+  service:
+    name: slurmctld
+    enabled: true
+    state: started
+
+- name: Initialize slurm accounting cluster entry (idempotent)
+  command: sacctmgr -i add cluster name={{ slurm_cluster_name }}
+  changed_when: false
+  failed_when: false
+  when: use_slurmdbd | default(true)

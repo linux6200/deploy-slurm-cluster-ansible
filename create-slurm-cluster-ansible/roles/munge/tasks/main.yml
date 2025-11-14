@@ -1,0 +1,37 @@
+---
+- name: Install munge and libs
+  apt:
+    name:
+      - munge
+      - libmunge2
+      - libmunge-dev
+    state: present
+    update_cache: yes
+
+- name: Ensure /etc/munge exists
+  file:
+    path: /etc/munge
+    state: directory
+    owner: munge
+    group: munge
+    mode: '0755'
+
+- name: Generate munge key (if missing) - runs on controller
+  command: /usr/sbin/create-munge-key
+  args:
+    creates: /etc/munge/munge.key
+  when: inventory_hostname in groups['controller']
+
+- name: Set permissions on munge key
+  file:
+    path: /etc/munge/munge.key
+    owner: munge
+    group: munge
+    mode: '0400'
+  when: ansible_facts is defined
+
+- name: Ensure munge service started and enabled
+  service:
+    name: munge
+    state: started
+    enabled: true

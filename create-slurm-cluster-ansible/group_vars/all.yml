@@ -1,0 +1,17 @@
+---
+# global variables
+slurm_user: slurm
+slurm_group: slurm
+slurm_cluster_name: ansible-slurm
+slurm_control_machine: controller
+slurm_control_addr: "{{ hostvars[groups['controller'][0]].ansible_host | default('127.0.0.1') }}"
+
+# MariaDB / slurmdbd
+use_slurmdbd: true
+mariadb_bind_address: 0.0.0.0
+mariadb_root_password: root123
+slurmdbd_dbname: slurm_acct_db
+slurmdbd_user: slurm
+slurmdbd_password: slurmdb123
+slurmdbd_storage_host: 127.0.0.1
+slurmdbd_storage_port: 3306

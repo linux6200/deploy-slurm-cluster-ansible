@@ -1,0 +1,31 @@
+ClusterName={{ slurm_cluster_name }}
+SlurmUser={{ slurm_user }} 
+# SlurmdUser={{ slurmd_user | default(slurm_user) }}
+SlurmctldHost={{ slurm_control_machine }}
+
+SlurmctldLogFile=/var/log/slurm/slurmctld.log
+SlurmdLogFile=/var/log/slurm/slurmd.log
+
+StateSaveLocation=/var/spool/slurmctld
+SlurmdSpoolDir=/var/spool/slurmd
+
+SchedulerType=sched/backfill
+SelectType=select/cons_res
+SelectTypeParameters=CR_Core
+
+# Accounting
+AccountingStorageType=accounting_storage/slurmdbd
+AccountingStorageHost={{ slurmdbd_storage_host }}
+AccountingStoragePass={{ slurmdbd_password }}
+
+# Nodes dynamically populated from compute group facts
+{% for host in groups['compute'] %}
+{% set hv = hostvars[host] %}
+# Host: {{ host }}
+{% set vcpus = (hv.ansible_processor_vcpus | default(hv.ansible_processors | default(hv.ansible_processor_count | default(1)))) %}
+{% set mem = (hv.ansible_memtotal_mb | default(0)) %}
+NodeName={{ host }}  CPUs={{ vcpus }} RealMemory={{ mem }} State=UNKNOWN
+{% endfor %}
+
+PartitionName=debug Nodes={{ groups['compute'] | join(',') }} Default=YES MaxTime=INFINITE State=UP
+

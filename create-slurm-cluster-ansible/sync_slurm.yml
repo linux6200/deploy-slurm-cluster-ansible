@@ -1,0 +1,19 @@
+- name: Sync /etc/slurm to compute nodes
+  hosts: compute
+  become: yes
+  tasks:
+    - name: Ensure /etc/slurm exists
+      file:
+        path: /etc/slurm
+        state: directory
+        owner: slurm
+        group: slurm
+        mode: '0600'
+
+    - name: Synchronize /etc/slurm
+      synchronize:
+        src: /etc/slurm/
+        dest: /etc/slurm/
+        recursive: yes
+        delete: yes
+        compress: yes
